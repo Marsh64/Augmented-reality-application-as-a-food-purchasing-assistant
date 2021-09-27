@@ -1,0 +1,55 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.Networking;
+
+public class Recommendation : MonoBehaviour
+{
+	public GameObject infoRecom;
+	public InputField InBarcodeForRecom;
+	public Text RecomText;
+	public Text RecomPrice;
+
+	// Start is called before the first frame update
+	void Start()
+    {
+        
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        
+    }
+
+	public void RecomButton()
+	{
+		if (infoRecom.activeInHierarchy == true)
+		{
+			infoRecom.SetActive(false);
+		}
+		else
+		{
+			infoRecom.SetActive(true);
+		}
+	}
+
+	IEnumerator RecomProduct(string cordnow, string Barcode)
+	{
+		UnityWebRequest www = UnityWebRequest.Get("http://192.168.3.6:8080/api/shopadress/coords,barcode/" + cordnow + "/" + Barcode);
+		yield return www.Send();
+		string a = www.downloadHandler.text;
+		RecomText.text = a;
+	}
+
+	public void Recomending()
+	{
+		string a = InBarcodeForRecom.text;
+		string b = GPS.Instance.latitude.ToString() + " " + GPS.Instance.longitude.ToString();
+		StartCoroutine(RecomProduct(b, a));
+
+		InBarcodeForRecom.text = string.Empty;
+	}
+
+}
