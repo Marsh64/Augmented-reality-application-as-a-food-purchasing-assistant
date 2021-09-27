@@ -1,0 +1,213 @@
+using BarcodeScanner;
+using BarcodeScanner.Scanner;
+using System;
+using System.Collections;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
+using Wizcorp.Utils.Logger;
+using UnityEngine;
+using System.Collections;
+using UnityEngine.Networking;
+using UnityEngine.UI;
+
+
+
+public class SimpleDemo : MonoBehaviour {
+
+	private IScanner BarcodeScanner;
+	public Text TextHeader;
+	public RawImage Image;
+	public AudioSource Audio;
+	public GameObject infoRecom;
+	public Text RecomText;
+	public GameObject ControlButtonMovetoMaps;
+	public Text SaveCordForMap;
+
+
+	public void RecomButton()
+	{
+		if (infoRecom.activeInHierarchy == true)
+		{
+			infoRecom.SetActive(false);
+		}
+		else
+		{
+			infoRecom.SetActive(true);
+		}
+	}
+
+	// Disable Screen Rotation on that screen
+	void Awake()
+	{
+		Screen.autorotateToPortrait = false;
+		Screen.autorotateToPortraitUpsideDown = false;
+	}
+
+	void Start () {
+
+		AndroidJavaObject TM = new AndroidJavaObject("android.telephony.TelephonyManager");
+		string IMEI = TM.Call<string>("getDeviceId");
+
+		// Create a basic scanner
+		BarcodeScanner = new Scanner();
+		BarcodeScanner.Camera.Play();
+
+		// Display the camera texture through a RawImage
+		BarcodeScanner.OnReady += (sender, arg) => {
+			// Set Orientation & Texture
+			Image.transform.localEulerAngles = BarcodeScanner.Camera.GetEulerAngles();
+			Image.transform.localScale = BarcodeScanner.Camera.GetScale();
+			Image.texture = BarcodeScanner.Camera.Texture;
+
+			// Keep Image Aspect Ratio
+			var rect = Image.GetComponent<RectTransform>();
+			var newHeight = rect.sizeDelta.x * BarcodeScanner.Camera.Height / BarcodeScanner.Camera.Width;
+			rect.sizeDelta = new Vector2(rect.sizeDelta.x, newHeight);
+		};
+
+		// Track status of the scanner
+		BarcodeScanner.StatusChanged += (sender, arg) => {
+			TextHeader.text = "Status: " + BarcodeScanner.Status;
+		};
+	}
+
+	/// <summary>
+	/// The Update method from unity need to be propagated to the scanner
+	/// </summary>
+	void Update()
+	{
+		if (BarcodeScanner == null)
+		{
+			return;
+		}
+		BarcodeScanner.Update();
+
+	}
+
+	#region UI Buttons
+	IEnumerator GetText(string barCodeValue, string cordnow)
+	{
+		UnityWebRequest www = UnityWebRequest.Get("http://192.168.3.6:8080/api/shopadress/coords,barcode/" + cordnow + "/" + barCodeValue);
+		yield return www.Send();
+		string a = www.downloadHandler.text;
+		char j = a[0];
+		if (j == '1')
+		{
+			string magazcord = a.Substring(2, 19);
+			string dist = a.Substring(1,1);
+			string name = a.Substring(21, a.Length - 21);
+			TextHeader.text = "Найден:" + barCodeValue + ":" + name +"/ Магазин с этим товаром находиться в радиусе-" + dist + "км";
+			if (ControlButtonMovetoMaps.activeInHierarchy == true)
+			{
+				ControlButtonMovetoMaps.SetActive(false);
+			}
+			else
+			{
+				ControlButtonMovetoMaps.SetActive(true);
+			}
+			SaveCordForMap.text = cordnow + "/" + magazcord;
+
+		}
+		else
+		{
+			TextHeader.text = "Товар не найден в базе данных";
+		}
+
+		if (www.isNetworkError)
+		{
+			Debug.Log(www.error);
+		}
+		else
+		{
+			// Show results as text
+			Debug.Log(www.downloadHandler.text);
+
+			// Or retrieve results as binary data
+			byte[] results = www.downloadHandler.data;
+		}
+		//yield return a;
+	}
+	
+
+	IEnumerator RecomProduct(string Barcode)
+	{
+		UnityWebRequest www = UnityWebRequest.Get("http://192.168.3.6:8080/api/recomendation/" + Barcode);
+		yield return www.Send();
+		string b = www.downloadHandler.text;
+		RecomText.text = b;
+	}
+
+	public void ClickMovetoMap()
+	{
+		string For = SaveCordForMap.text;
+		string Formap = "https://www.google.ru/maps/dir/" + For;
+		Application.OpenURL(Formap);
+	}
+
+
+
+	public void ClickStart()
+	{
+
+		ControlButtonMovetoMaps.SetActive(false);
+
+		if (BarcodeScanner == null)
+		{
+			Log.Warning("No valid camera - Click Start");
+			return;
+		}
+
+		// Start Scanning
+		BarcodeScanner.Scan((barCodeType, barCodeValue) => {
+			BarcodeScanner.Stop();
+			string b = GPS.Instance.latitude.ToString() + " " + GPS.Instance.longitude.ToString();
+			StartCoroutine(GetText(barCodeValue, b));
+			StartCoroutine(RecomProduct(barCodeValue));
+
+			// Feedback
+			Audio.Play();
+
+			#if UNITY_ANDROID || UNITY_IOS
+			Handheld.Vibrate();
+			#endif
+		});
+	}
+
+	public void ClickStop()
+	{
+		if (BarcodeScanner == null)
+		{
+			Log.Warning("No valid camera - Click Stop");
+			return;
+		}
+
+		// Stop Scanning
+		BarcodeScanner.Stop();
+	}
+
+	public void ClickBack()
+	{
+		// Try to stop the camera before loading another scene
+		StartCoroutine(StopCamera(() => {
+			SceneManager.LoadScene("Boot");
+		}));
+	}
+
+	
+	public IEnumerator StopCamera(Action callback)
+	{
+		// Stop Scanning
+		Image = null;
+		BarcodeScanner.Destroy();
+		BarcodeScanner = null;
+
+		// Wait a bit
+		yield return new WaitForSeconds(0.1f);
+
+		callback.Invoke();
+	}
+
+	#endregion
+
+}
