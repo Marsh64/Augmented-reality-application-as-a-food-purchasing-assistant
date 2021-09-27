@@ -1,0 +1,66 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+using System.Collections;
+using UnityEngine.Networking;
+using UnityEngine.UI;
+using System;
+
+public class ADDcontrol : MonoBehaviour
+{
+	public GameObject info;
+
+	public InputField InBarcode;
+	public InputField InMarketName;
+	public InputField InPrice;
+
+	// Start is called before the first frame update
+	void Start()
+    {
+
+	}
+
+    // Update is called once per frame
+    void Update()
+    {
+        
+    }
+
+	public void Reset()
+	{
+		InBarcode.text = string.Empty;
+		InMarketName.text = string.Empty;
+		InPrice.text = string.Empty;
+	}
+
+	public void Addbutton()
+	{
+		if (info.activeInHierarchy == true)
+		{
+			info.SetActive(false);
+		}
+		else
+		{
+			info.SetActive(true);
+		}
+	}
+	
+	IEnumerator AddProduct(string code,string name,string price, string cordnow)
+	{
+		UnityWebRequest www = UnityWebRequest.Get("http://192.168.3.6:8080/api/shopbase/add/" + code + "/" + name + "/" + price + "/" + cordnow); 
+		yield return www.Send();
+	}
+
+	public void Adding()
+	{
+		string a = InBarcode.text;
+		string b = InMarketName.text;
+		string c = InPrice.text;
+		string d = GPS.Instance.latitude.ToString() + " " + GPS.Instance.longitude.ToString();
+		StartCoroutine(AddProduct(a, b, c, d));
+		InBarcode.text = string.Empty;
+		InMarketName.text = string.Empty;
+		InPrice.text = string.Empty;
+	}
+}
